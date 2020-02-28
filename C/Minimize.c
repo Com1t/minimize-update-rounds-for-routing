@@ -31,7 +31,7 @@ int checkMultiple_inBetween(node origMap[], navigator nav[], int mergeCounter, i
 // find shortcuts in origMap by the new_rule, and store them into nav(with merged destination), return how many shortcuts
 int find_shortcuts(node origMap[], int new_rule[], navigator nav[]);
 // find out which one is the longest, and put them into helper[], return how many were found
-int find_longest(findLongestHelper helper[], navigator nav[], int shortcutCounter);
+int find_longest(findLongestHelper *helper, navigator nav[], int shortcutCounter);
 
 int main()
 {
@@ -39,21 +39,23 @@ int main()
 	scanf("%d", &node_counts);     // input the numeber of nodes
 	// using an array for storing original node rules
 	node* nodes = malloc(sizeof(node)*node_counts);
-	for (int i = 0; i < node_counts; i++) { // initiation
-		nodes[i].next_node = 0;
-		nodes[i].merge_to = 0;
-	}
+	
 	int* fLine = calloc(node_counts, sizeof(int));
 	for (int i = 0; i < node_counts; i++) {
 		scanf("%d", &nodes[i].next_node);
 		fLine[i] = nodes[i].next_node;
+		nodes[i].merge_to = 0;
 	}
 
 	// using another array for storing new rules
+	node* new_nodes = malloc(sizeof(node)*node_counts);
 	int* new_rule = calloc(node_counts, sizeof(int));
-	for (int i = 0; i < node_counts; i++)
+	for (int i = 0; i < node_counts; i++){
 		scanf("%d", &new_rule[i]);
-
+		new_nodes[i].next_node = new_rule[i];
+		new_nodes[i].merge_to = 0;
+	}
+	
 	node* old_rule = malloc(sizeof(node)*node_counts);
 	for (int i = 0; i < node_counts; i++) {	// initiation
 		old_rule[i].next_node = 0;
@@ -81,7 +83,7 @@ int main()
 		Lines[i] = calloc(node_counts, sizeof(int));
 
 	// find the longest shortcut and store them into helper[]
-	findLongestHelper helper[100] = {0, INT_MIN};
+	findLongestHelper helper = {0, INT_MIN};
 	int longestCounter = 0;
 
 	int mergeCounter = 1;			// this will record how many shortcuts in nav[] has done 
@@ -92,7 +94,7 @@ int main()
 		if (roundIndicator % 2) {
 			// odd round
 			// find the longest shortcut and store them into helper[]
-			longestCounter = find_longest(helper, nav, shortcutCounter);
+			longestCounter = find_longest(&helper, nav, shortcutCounter);
 			if (longestCounter == 0)
 				break;		// longestCounter gets to zero means we done all rule changes
 
@@ -101,23 +103,31 @@ int main()
 			}
 			lineCounter++;
 
-			doneMerge[mergeCounter - 1] = helper[0].curLongestRec;
-			for (int i = 0; i < longestCounter; i++) {
-				if (!checkMultiple_inBetween(nodes, nav, mergeCounter, doneMerge, nav[helper[i].curLongestRec].start)) {
-					// merge the node and connects to the next one
-					nodes[nav[helper[i].curLongestRec].start].next_node = new_rule[nav[helper[i].curLongestRec].start];
-					nodes[nav[helper[i].curLongestRec].start].merge_to = new_rule[nav[helper[i].curLongestRec].start];
-					if (doneMerge[mergeCounter - 1] != helper[i].curLongestRec) {
-						mergeCounter++;
-						// if we got multiple equal disp. route, since we already put first route inside
-						// while merging if we had no this condition it will record first record for twice
-						doneMerge[mergeCounter - 1] = helper[i].curLongestRec;
-					}
-				}
-				helper[i].curLongestRec = 0;
-				helper[i].curLongestDisp = INT_MIN;
-			}
+			doneMerge[mergeCounter - 1] = helper.curLongestRec;
 
+			nodes[nav[helper.curLongestRec].start].next_node = new_rule[nav[helper.curLongestRec].start];
+			nodes[nav[helper.curLongestRec].start].merge_to = new_rule[nav[helper.curLongestRec].start];
+
+			helper.curLongestRec = 0;
+			helper.curLongestDisp = INT_MIN;
+			
+			// if we can have multiple route done, done others here
+			for (int i = 0; i < shortcutCounter; i++) {
+				if (nav[i].start == -1 || i == doneMerge[i]) {
+					continue;
+				}
+				else if (!checkMultiple_inBetween(old_rule, nav, mergeCounter, doneMerge, nav[i].start) && !checkMultiple_inBetween(old_rule, nav, mergeCounter, doneMerge, merge_toWhere(nodes, nav[i].dest))) {
+					// merge the node and connects to the next one
+					nodes[nav[i].start].next_node = new_rule[nav[i].start];
+					nodes[nav[i].start].merge_to = new_rule[nav[i].start];
+					mergeCounter++;
+					doneMerge[mergeCounter - 1] = i;
+				}
+			}
+			printf("Round %d\n", roundIndicator);
+			for(int i = 0; i < shortcutCounter; i ++)
+				printf("%d %d %d\n", nav[i].start, merge_toWhere(nodes, nav[i].dest), nav[i].disp);
+			printf("\n");
 			for (int i = 0; i < node_counts; i++) {
 				Lines[lineCounter][i] = nodes[i].next_node;
 			}
@@ -163,8 +173,7 @@ int main()
 		}
 		printf("\n");
 	}
-
-	free(nodes);
+	
 	free(new_rule);
 	for (int i = lineCounter; i < shortcutCounter * 2; i++)
 		free(Lines[i]);
@@ -264,25 +273,25 @@ int find_shortcuts(node origMap[], int new_rule[], navigator nav[]) {
 	return shortcutCounter;
 }
 // find out which one is the longest, and put them into helper[], return how many were found
-int find_longest(findLongestHelper helper[], navigator nav[], int shortcutCounter) {
+int find_longest(findLongestHelper *helper, navigator nav[], int shortcutCounter){
 	int longestCounter = 0;
-	int longestCounterLB = 0;	// left bigger
 	// find the longest shortcut
 	for (int i = 0; i < shortcutCounter; i++) {
 		// after being merged the nav's element will get a start with -1
 		if (nav[i].start != -1) {
-			if (nav[i].disp > helper[longestCounter].curLongestDisp) {
-				helper[longestCounter].curLongestRec = i;
-				helper[longestCounter].curLongestDisp = nav[i].disp;
-				if(longestCounterLB == 0)
-					longestCounterLB = 1;	// separate LB from lonegestCounter, in order to make it can always point to the biggest
+			if (nav[i].disp > helper->curLongestDisp) {
+				helper->curLongestRec = i;
+				helper->curLongestDisp = nav[i].disp;
+				if(longestCounter == 0)
+					longestCounter = 1;
 			}
-			else if (nav[i].disp == helper[longestCounter].curLongestDisp) {
-				longestCounter++;
-				helper[longestCounter].curLongestRec = i;
-				helper[longestCounter].curLongestDisp = nav[i].disp;
+			else if (nav[i].disp == helper->curLongestDisp && nav[i].start < nav[helper->curLongestRec].start) {
+				helper->curLongestRec = i;
+				helper->curLongestDisp = nav[i].disp;
+				if (longestCounter == 0)
+					longestCounter = 1;
 			}
 		}
 	}
-	return longestCounter + longestCounterLB;
+	return longestCounter;
 }
