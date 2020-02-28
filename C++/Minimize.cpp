@@ -1,4 +1,5 @@
 #include <iostream>
+#include <cmath>
 #include <climits>
 
 using namespace std;
@@ -6,17 +7,14 @@ using namespace std;
 struct node {
 	int next_node = 0;
 	int merge_to = 0;
+	int startORend = 0;
 };
 // navigate shortcut with merged destination
 struct navigator {
 	int start = 0;
 	int dest = 0;
 	int disp = 0;
-};
-// help us to identify which navigate record needs to be handle
-struct findLongestHelper {
-	int curLongestRec = 0;
-	int curLongestDisp = INT_MIN;
+	int proceeded = 0;
 };
 
 // parse every node in the graph
@@ -30,11 +28,11 @@ int calDisp(node origMap[], int init, int des);
 // check if the node(beingCheck) is in between of init node and des node, if it is return 1
 int inBetween(node origMap[], int init, int des, int beingCheck);
 // check if the node(beingCheck) is in between of init node and des node indicate by nav and doneMerge, if it is return 1
-int checkMultiple_inBetween(node origMap[], navigator nav[], int mergeCounter, int doneMerge[], int beingCheck);
+int checkMultiple_inBetween(node origMap[], navigator nav[], int shortcutCounter, int beingCheck);
 // find shortcuts in origMap by the new_rule, and store them into nav(with merged destination), return how many shortcuts
 int find_shortcuts(node origMap[], int new_rule[], navigator nav[]);
 // find out which one is the longest, and put them into helper[], return how many were found
-int find_longest(findLongestHelper helper[], navigator nav[], int shortcutCounter);
+int find_longest(int &curLongestRec, navigator nav[], int shortcutCounter);
 
 int main()
 {
@@ -42,117 +40,207 @@ int main()
 	cin >> node_counts;     // input the numeber of nodes
 	// using an array for storing original node rules
 	node* nodes = new node[node_counts]();
-	node* old_rule = new node[node_counts]();
+	int* fLine = new int[node_counts]();
 	for (int i = 0; i < node_counts; i++) {
 		cin >> nodes[i].next_node;
+		fLine[i] = nodes[i].next_node;
 	}
 	// using another array for storing new rules
 	int* new_rule = new int[node_counts]();
 	for (int i = 0; i < node_counts; i++)
 		cin >> new_rule[i];
 
-	cout << endl;
-
-	// print original, and deal with the easiest
+	// deal with the easiest
 	for (int i = 0; i < node_counts; i++) {
-		cout << nodes[i].next_node;
-		if (i + 1 != node_counts)
-			cout << " ";
 		// the last node looks identical to the other easiest nodes, thus, avoid merge that
-		if (nodes[i].next_node == -1 && i != (node_counts-1)) {
+		if (nodes[i].next_node == -1 && i != (node_counts - 1)) {
 			nodes[i].next_node = new_rule[i];
 			nodes[i].merge_to = new_rule[i];
 		}
-		old_rule[i].next_node = nodes[i].next_node;
 	}
-	cout << endl;
 
 	// find shortcuts and store them into nav[]
-	navigator* nav = new navigator[100]();
+	navigator nav[100] = {};
 	int shortcutCounter = find_shortcuts(nodes, new_rule, nav);
 
+	node* old_rule = new node[node_counts]();
+
+	cout << "Run starts since here" << endl;
+	// a temperary storage for outputs
+	int** Lines = new int*[shortcutCounter * 2]();
+	Lines[0] = fLine;
+	int lineCounter = 1;
+	for (int i = lineCounter; i < shortcutCounter * 2; i++)
+		Lines[i] = new int[node_counts]();
+
 	// find the longest shortcut and store them into helper[]
-	findLongestHelper helper[100] = {};
+	int curLongestRec = 0;
 	int longestCounter = 0;
 
-	int mergeCounter = 1;			// this will record how many shortcuts in nav[] has done 
-	int doneMerge[100] = {};		// inside this array will record which shortcut in nav[] has done 
-	
-	int fuck = 1;
-	// the worst case would be 
-	while (fuck) {
-		if (fuck % 2) {
+	int roundIndicator = 1;
+	while (roundIndicator) {
+		if (roundIndicator % 2) {
 			// odd round
+			for (int i = 0; i < node_counts; i++) {
+				old_rule[i].next_node = nodes[i].next_node;
+				old_rule[i].merge_to = nodes[i].merge_to;
+				old_rule[i].startORend = nodes[i].startORend;
+			}
 			// find the longest shortcut and store them into helper[]
-			longestCounter = find_longest(helper, nav, shortcutCounter);
+			longestCounter = find_longest(curLongestRec, nav, shortcutCounter);
 			if (longestCounter == 0)
 				break;		// longestCounter gets to zero means we done all rule changes
 
 			for (int i = 0; i < node_counts; i++) {
-				cout << nodes[i].next_node;
-				if (i + 1 != node_counts)
-					cout << " ";
+				Lines[lineCounter][i] = nodes[i].next_node;		// record the result in here
 			}
-			cout << endl;
-			doneMerge[mergeCounter - 1] = helper[0].curLongestRec;
-			for (int i = 0; i < longestCounter; i++) {
-				if (!checkMultiple_inBetween(nodes, nav, mergeCounter, doneMerge, nav[helper[i].curLongestRec].start)) {
-					// merge the node and connects to the next one
-					nodes[nav[helper[i].curLongestRec].start].next_node = new_rule[nav[helper[i].curLongestRec].start];
-					nodes[nav[helper[i].curLongestRec].start].merge_to = new_rule[nav[helper[i].curLongestRec].start];
-					if(doneMerge[mergeCounter - 1] != helper[i].curLongestRec){
-						mergeCounter++;
-						// if we got multiple equal disp. route, since we already put first route inside
-						// while merging if we had no this condition it will record first record for twice
-						doneMerge[mergeCounter - 1] = helper[i].curLongestRec;
-					}
-				}
-				helper[i].curLongestRec = 0;
-				helper[i].curLongestDisp = INT_MIN;
-			}
+			lineCounter++;
 
-			for (int i = 0; i < node_counts; i++) {
-				cout << nodes[i].next_node;
-				if (i + 1 != node_counts)
-					cout << " ";
-			}
-			cout << endl;
-		}
-		else {
-			// even round
+			// added for debug
 			for (int i = 0; i < shortcutCounter; i++) {
-				if (nav[i].start == -1 || i == doneMerge[i]) {
+				cout << nav[i].start << "\t" << nav[i].dest << "\t" << nav[i].disp << "\t" << nav[i].proceeded << endl;
+			}
+			for (int i = 0; i < node_counts; i++) {
+				cout << nodes[i].next_node << " ";
+			}
+			cout << endl << endl;
+			// added for debug
+			
+			nodes[nav[curLongestRec].start].next_node = new_rule[nav[curLongestRec].start];
+			nodes[nav[curLongestRec].start].merge_to = new_rule[nav[curLongestRec].start];
+			nodes[nav[curLongestRec].start].startORend--;
+			nav[curLongestRec].proceeded = 1;
+
+			// if we can have multiple route done, done others here
+			for (int i = 0; i < shortcutCounter; i++) {
+				if (i == curLongestRec || nav[i].proceeded == -1 || nav[i].disp < 0)
 					continue;
-				}
-				else if (checkMultiple_inBetween(old_rule, nav, mergeCounter, doneMerge, nav[i].start)) {
+
+				if (!checkMultiple_inBetween(old_rule, nav, shortcutCounter, nav[i].start) && !checkMultiple_inBetween(old_rule, nav, shortcutCounter, merge_toWhere(old_rule, nav[i].dest))) {
 					// merge the node and connects to the next one
 					nodes[nav[i].start].next_node = new_rule[nav[i].start];
 					nodes[nav[i].start].merge_to = new_rule[nav[i].start];
-					nav[i].start = -1;		// using -1 to identify this rule has been updeted
+					nodes[nav[i].start].startORend--;
+					nav[i].proceeded = 1;
 				}
 			}
-			for (int i = 0; i < mergeCounter; i++) {
-				nav[doneMerge[i]].start = -1;
-				doneMerge[i] = 0;
+
+			curLongestRec = 0;
+
+			for (int i = 0; i < node_counts; i++) {
+				Lines[lineCounter][i] = nodes[i].next_node;		// record the result in here
 			}
-			mergeCounter = 1;
+			lineCounter++;
+
+			// added for debug
+			for (int i = 0; i < shortcutCounter; i++) {
+				cout << nav[i].start << "\t" << nav[i].dest << "\t" << nav[i].disp << "\t" << nav[i].proceeded << endl;
+			}
+			for (int i = 0; i < node_counts; i++) {
+				cout << nodes[i].next_node << " ";
+			}
+			cout << endl << endl;
+			// added for debug
+
 		}
-		fuck++;
+		else {
+			// even round
+
+			// added for debug
+			// to see if the startOrrend has been chenged
+			cout << endl << "BEFORE: " << endl;
+			for (int i = 0; i < node_counts; i++) {
+				cout << i << "\t";
+			}
+			cout << endl;
+			for (int i = 0; i < node_counts; i++) {
+				cout << nodes[i].next_node << "\t";
+			}
+			cout << endl;
+			for (int i = 0; i < node_counts; i++) {
+				cout << nodes[i].startORend << "\t";
+			}
+			cout << endl << endl;
+			// added for debug
+
+			for (int i = 0; i < shortcutCounter; i++) {
+				if (nav[i].proceeded == 0 && checkMultiple_inBetween(old_rule, nav, shortcutCounter, nav[i].start)) {
+					// merge the node and connects to the next one
+					nodes[nav[i].start].next_node = new_rule[nav[i].start];
+					nodes[nav[i].start].merge_to = new_rule[nav[i].start];
+					nodes[nav[i].start].startORend--;
+					nav[i].proceeded = 1;
+				}
+			}
+
+			// added for debug
+			// to see if the startOrrend has been chenged
+			cout << endl << "AFTER" << endl;
+			for (int i = 0; i < node_counts; i++) {
+				cout << i << "\t";
+			}
+			cout << endl;
+			for (int i = 0; i < node_counts; i++) {
+				cout << nodes[i].next_node << "\t";
+			}
+			cout << endl;
+			for (int i = 0; i < node_counts; i++) {
+				cout << nodes[i].startORend << "\t";
+			}
+			cout << endl << endl;
+			// added for debug
+
+			for (int i = 0; i < shortcutCounter; i++) {
+				if (nav[i].proceeded == 1)
+					nav[i].proceeded = -1;
+				else {
+					if (outside_theGraph(nodes, nav[i].dest)){
+						nav[i].dest = merge_toWhere(nodes, nav[i].dest);
+					}
+					nav[i].disp = calDisp(nodes, nav[i].start, nav[i].dest);
+					if (nav[i].disp == 0)
+						nav[i].disp = -calDisp(nodes, nav[i].dest, nav[i].start);
+				}
+			}
+		}
+		roundIndicator++;
 	}
-	// print original, and deal with the easiest
+	// to deal with outside nodes, and clean merge_to
 	for (int i = 0; i < node_counts; i++) {
 		if (nodes[i].merge_to == 0)
-			cout << "-1";
+			Lines[lineCounter][i] = -1;
 		else
-			cout << nodes[i].next_node;
+			Lines[lineCounter][i] = nodes[i].next_node;
 		nodes[i].merge_to = 0;
-		if (i + 1 != node_counts)
-			cout << " ";
 	}
-	cout << endl << "EOF" << endl;
+	lineCounter++;
+
+	// added for debug
+	for (int i = 0; i < shortcutCounter; i++) {
+		cout << nav[i].start << "\t" << nav[i].dest << "\t" << nav[i].disp << "\t" << nav[i].proceeded << endl;
+	}
+	for (int i = 0; i < node_counts; i++) {
+		cout << nodes[i].next_node << " ";
+	}
+	cout << endl;
+	// added for debug
+
+	// original printout, suspened now for debug
+	cout << lineCounter << endl;
+	for (int i = 0; i < lineCounter; i++) {
+		for (int j = 0; j < node_counts; j++) {
+			cout << Lines[i][j];
+			if (j + 1 != node_counts)
+				cout << " ";
+		}
+		cout << endl;
+	}
+
 	delete[] nodes;
 	delete[] new_rule;
-	delete[] nav;
+	for (int i = lineCounter; i < shortcutCounter * 2; i++)
+		delete[] Lines[i];
+	delete[] Lines;
 
 	return 0;
 }
@@ -166,12 +254,12 @@ void parse_all(node origMap[]) {
 	cout << endl;
 }
 // differentiate a node is in inside or outside, if it is return 1
-int outside_theGraph(node origMap[], int des){
+int outside_theGraph(node origMap[], int des) {
 	int outside = 1;
 	int curNode = 0;
 	while (curNode != -1) {
 		curNode = origMap[curNode].next_node;
-		if (curNode == des){	// parsed the des node inside the graph
+		if (curNode == des) {	// parsed the des node inside the graph
 			outside = 0;
 			break;
 		}
@@ -187,18 +275,20 @@ int merge_toWhere(node origMap[], int init) {
 	return curNode;								//	if it is 0, means it merges to nowhere
 }
 // calculate displacement
-int calDisp(node origMap[], int init,int des){
-	int disp = 0;
+int calDisp(node origMap[], int init, int des) {
+	int disp = 1;
 	int curNode = init;
 	while (curNode != -1) {
-		disp++;
 		if (origMap[curNode].next_node == des)
 			break;
-		else
-			curNode = origMap[curNode].next_node;
+
+		if (origMap[origMap[curNode].next_node].startORend)
+			disp++;
+
+		curNode = origMap[curNode].next_node;
 	}
 	if (curNode == -1)
-		return -1;		// if we reach the -1, means the node is not in the forward direction of graph
+		return 0;		// if we reach the -1, means the node is not in the forward direction of graph
 	return disp;
 }
 // check if the node(beingCheck) is in between of init node and des node, if it is return 1
@@ -213,13 +303,20 @@ int inBetween(node origMap[], int init, int des, int beingCheck) {
 	return 0;
 }
 // check if the node(beingCheck) is in between of init node and des node indicate by nav and doneMerge, if it is return 1
-int checkMultiple_inBetween(node origMap[], navigator nav[], int mergeCounter, int doneMerge[], int beingCheck) {
-	for (int i = 0; i < mergeCounter; i++) {
-		if (inBetween(origMap, nav[doneMerge[i]].start, nav[doneMerge[i]].dest, beingCheck)) {
-			return true;
+int checkMultiple_inBetween(node origMap[], navigator nav[], int shortcutCounter, int beingCheck) {
+	for (int i = 0; i < shortcutCounter; i++) {
+		if (nav[i].proceeded == 1) {
+			if (nav[i].disp >= 0) {
+				if(inBetween(origMap, nav[i].start, nav[i].dest, beingCheck))
+					return 1;
+			}				
+			else {
+				if (inBetween(origMap, nav[i].dest, nav[i].start, beingCheck))
+					return 1;
+			}
 		}
 	}
-	return false;
+	return 0;
 }
 // find shortcuts in origMap by the new_rule, and store them into nav(with merged destination), return how many shortcuts
 int find_shortcuts(node origMap[], int new_rule[], navigator nav[]) {
@@ -233,41 +330,42 @@ int find_shortcuts(node origMap[], int new_rule[], navigator nav[]) {
 
 		nav[shortcutCounter].start = startNode;
 		nav[shortcutCounter].dest = destNode;
-
-		nav[shortcutCounter].disp = calDisp(origMap, startNode, destNode);
-		// if -1 means we can not see the node in forward direction
-		if (nav[shortcutCounter].disp == -1)
-			nav[shortcutCounter].disp = -calDisp(origMap, destNode, startNode);
-
+		origMap[startNode].startORend++;
 		// go through the next one
 		startNode = destNode;
 		destNode = new_rule[destNode];
 
 		shortcutCounter++;
 	}
+	for (int i = 0; i < shortcutCounter; i++) {
+		nav[i].disp = calDisp(origMap, nav[i].start, nav[i].dest);
+		// if 0 means we can not see the node in forward direction
+		if (nav[i].disp == 0)	// check the reverse direction
+			nav[i].disp = -calDisp(origMap, nav[i].dest, nav[i].start);
+	}
 	return shortcutCounter;
 }
 // find out which one is the longest, and put them into helper[], return how many were found
-int find_longest(findLongestHelper helper[], navigator nav[], int shortcutCounter) {
+int find_longest(int &curLongestRec, navigator nav[], int shortcutCounter) {
 	int longestCounter = 0;
-	int longestCounterLB = 0;	// left bigger
+	int curLongestDisp = INT_MIN;
 	// find the longest shortcut
 	for (int i = 0; i < shortcutCounter; i++) {
-		//cout << nav[i].start << "\t" << nav[i].dest << "\t" << nav[i].disp << endl;
-		// after being merged the nav's element will get a start with -1
-		if (nav[i].start != -1) {
-			if (nav[i].disp > helper[longestCounter].curLongestDisp) {
-				helper[longestCounter].curLongestRec = i;
-				helper[longestCounter].curLongestDisp = nav[i].disp;
-				if(longestCounterLB == 0)
-					longestCounterLB = 1;	// separate LB from lonegestCounter, in order to make it can always point to the biggest
+		// after being proceeded the nav's proceeded element will be -1
+		if (nav[i].proceeded == 0) {
+			if (nav[i].disp > curLongestDisp) {
+				curLongestRec = i;
+				curLongestDisp = nav[i].disp;
+				if (longestCounter == 0)
+					longestCounter = 1;
 			}
-			else if (nav[i].disp == helper[longestCounter].curLongestDisp) {
-				longestCounter++;
-				helper[longestCounter].curLongestRec = i;
-				helper[longestCounter].curLongestDisp = nav[i].disp;
+			else if (nav[i].disp == curLongestDisp && nav[i].start < nav[curLongestRec].start) {
+				curLongestRec = i;
+				curLongestDisp = nav[i].disp;
+				if (longestCounter == 0)
+					longestCounter = 1;
 			}
 		}
 	}
-	return longestCounter + longestCounterLB;
+	return longestCounter;
 }
